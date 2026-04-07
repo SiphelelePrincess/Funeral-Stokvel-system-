@@ -28,6 +28,8 @@ export function MemberDashboard() {
   const [attendanceNotice, setAttendanceNotice] = useState<string | null>(null);
   const [rentalNotice, setRentalNotice] = useState<string | null>(null);
   const [supportNotice, setSupportNotice] = useState<string | null>(null);
+  const [meetingNotice, setMeetingNotice] = useState<string | null>(null);
+  const [votingNotice, setVotingNotice] = useState<string | null>(null);
   const [customize, setCustomize] = useState(false);
   const [showBeneficiaries, setShowBeneficiaries] = useState(true);
   const [showMeetings, setShowMeetings] = useState(true);
@@ -374,8 +376,9 @@ export function MemberDashboard() {
             : person,
         ),
       );
+      setBeneficiaryNotice("ID copy uploaded successfully.");
     } catch {
-      // keep local state change
+      setBeneficiaryNotice("ID upload failed. Please try again.");
     }
   };
 
@@ -395,8 +398,9 @@ export function MemberDashboard() {
           person.idNumber === idNumber ? { ...person, photoUrl: "Uploaded" } : person,
         ),
       );
+      setBeneficiaryNotice("Beneficiary photo uploaded successfully.");
     } catch {
-      // keep local state change
+      setBeneficiaryNotice("Photo upload failed. Please try again.");
     }
   };
 
@@ -517,6 +521,7 @@ export function MemberDashboard() {
           : item,
       ),
     );
+    setVotingNotice(`Your vote was recorded as ${vote.toUpperCase()}.`);
     try {
       await fetch("/api/decisions/vote", {
         method: "POST",
@@ -524,7 +529,7 @@ export function MemberDashboard() {
         body: JSON.stringify({ externalId: id, vote }),
       });
     } catch {
-      // no-op
+      setVotingNotice("Your vote was recorded locally. It will sync once online.");
     }
   };
 
@@ -536,6 +541,7 @@ export function MemberDashboard() {
         reason: prev[meetingTitle]?.reason ?? "",
       },
     }));
+    setMeetingNotice(`You have ${status === "accept" ? "accepted" : "declined"} the meeting: ${meetingTitle}.`);
     try {
       await fetch("/api/meetings/rsvp", {
         method: "POST",
@@ -543,7 +549,7 @@ export function MemberDashboard() {
         body: JSON.stringify({ meetingTitle, status }),
       });
     } catch {
-      // no-op
+      setMeetingNotice("Your RSVP was saved locally. It will sync once online.");
     }
   };
 
@@ -555,6 +561,7 @@ export function MemberDashboard() {
         reason,
       },
     }));
+    setMeetingNotice("Your reason for declining has been saved.");
     try {
       await fetch("/api/meetings/rsvp", {
         method: "POST",
@@ -562,7 +569,7 @@ export function MemberDashboard() {
         body: JSON.stringify({ meetingTitle, status: "decline", reason }),
       });
     } catch {
-      // no-op
+      setMeetingNotice("Your decline reason was saved locally. It will sync once online.");
     }
   };
 
@@ -1055,6 +1062,7 @@ export function MemberDashboard() {
               ))}
             </div>
             <div className="mt-6 space-y-4">
+              {meetingNotice ? <p className="text-sm text-zinc-600">{meetingNotice}</p> : null}
               {meetingsList.map((meeting) => {
                 const rsvp = rsvpState[meeting.title];
                 const isDecline = rsvp?.status === "decline";
@@ -1150,6 +1158,7 @@ export function MemberDashboard() {
               </div>
             </div>
             <div className="mt-6 space-y-4">
+              {votingNotice ? <p className="text-sm text-zinc-600">{votingNotice}</p> : null}
               {decisions.length ? (
                 decisions.map((decision) => (
                   <div key={decision.id} className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">

@@ -8,10 +8,10 @@ export const paystackConfig = {
 
 export const paystack = new Paystack(paystackConfig.secretKey);
 
-export function hasPaystackConfig() {
-  return Boolean(
-    paystackConfig.publicKey &&
-      paystackConfig.secretKey &&
-      paystackConfig.webhookSecret,
-  );
+export function hasPaystackCredentials() {
+  return Boolean(paystackConfig.publicKey && paystackConfig.secretKey);
+}
+
+export function hasPaystackWebhookSecret() {
+  return Boolean(paystackConfig.webhookSecret);
 }

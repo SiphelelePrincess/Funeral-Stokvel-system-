@@ -38,6 +38,7 @@ export default defineSchema({
     memberId: v.id("users"),
     amount: v.number(),
     date: v.string(),
+    month: v.optional(v.string()),
     status: v.union(v.literal("pending"), v.literal("paid"), v.literal("late"), v.literal("missed")),
     paymentReference: v.optional(v.string()),
   }).index("by_memberId", ["memberId"]),

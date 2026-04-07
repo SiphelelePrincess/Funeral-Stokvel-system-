@@ -7,6 +7,7 @@ export async function POST(request: Request) {
     memberName?: string;
     amount?: number;
     date?: string;
+    month?: string;
   };
 
   const client = getConvexClient();
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
     memberId: memberId ?? (profile.userId as unknown as string),
     amount: body.amount,
     date: body.date,
+    month: body.month,
     status: "paid",
   });
 

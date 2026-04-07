@@ -270,20 +270,30 @@ export function AdminDashboard() {
 
   const handleDeleteRental = async (rentalId: string) => {
     setRentalRequests((prev) => prev.filter((item) => item._id !== rentalId));
-    await fetch("/api/rentals/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rentalId }),
-    });
+    try {
+      await fetch("/api/rentals/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rentalId }),
+      });
+      setNotice("Rental request removed.");
+    } catch {
+      setNotice("Rental request removed locally. Connect Convex to persist.");
+    }
   };
 
   const handleDeleteSupport = async (supportRequestId: string) => {
     setSupportRequests((prev) => prev.filter((item) => item._id !== supportRequestId));
-    await fetch("/api/supports/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ supportRequestId }),
-    });
+    try {
+      await fetch("/api/supports/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ supportRequestId }),
+      });
+      setNotice("Support request removed.");
+    } catch {
+      setNotice("Support request removed locally. Connect Convex to persist.");
+    }
   };
 
   const handleAwardPoints = async () => {

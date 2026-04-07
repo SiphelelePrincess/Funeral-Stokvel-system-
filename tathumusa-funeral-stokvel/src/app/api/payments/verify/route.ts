@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasPaystackConfig, paystack } from "@/lib/paystack";
+import { hasPaystackCredentials, paystack } from "@/lib/paystack";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!hasPaystackConfig()) {
+  if (!hasPaystackCredentials()) {
     return NextResponse.json(
       {
         ok: false,
@@ -29,13 +29,13 @@ export async function GET(request: NextRequest) {
       ok: true,
       data: verification.data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Payment verification error:", error);
     return NextResponse.json(
       {
         ok: false,
         message: "Failed to verify payment",
-        error: error.message,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

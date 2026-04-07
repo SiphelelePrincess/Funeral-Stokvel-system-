@@ -23,6 +23,7 @@ export const create = mutation({
     memberId: v.id("users"),
     amount: v.number(),
     date: v.string(),
+    month: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("paid"),
@@ -36,6 +37,7 @@ export const create = mutation({
       memberId: args.memberId,
       amount: args.amount,
       date: args.date,
+      month: args.month,
       status: args.status,
       paymentReference: args.paymentReference,
     });

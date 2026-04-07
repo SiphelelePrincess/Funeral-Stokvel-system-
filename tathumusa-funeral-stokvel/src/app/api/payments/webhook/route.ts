@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { paystackConfig } from "@/lib/paystack";
+import { hasPaystackWebhookSecret, paystackConfig } from "@/lib/paystack";
 import crypto from "crypto";
 import { callMutation, callQuery, getConvexClient } from "@/lib/convex-server";
 
@@ -7,6 +7,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
     const signature = request.headers.get("x-paystack-signature");
+
+    if (!hasPaystackWebhookSecret()) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Paystack webhook secret is not configured. Set PAYSTACK_WEBHOOK_SECRET.",
+        },
+        { status: 503 }
+      );
+    }
 
     if (!signature) {
       return NextResponse.json(
@@ -47,6 +57,7 @@ export async function POST(request: NextRequest) {
               memberId: user._id,
               amount: amount / 100,
               date: new Date().toISOString(),
+              month: metadata?.month,
               status: "paid",
               paymentReference: reference,
             });
@@ -82,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true, message: "Webhook processed" });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhook error:", error);
     return NextResponse.json(
       { ok: false, message: "Webhook processing failed" },
