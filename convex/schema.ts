@@ -115,7 +115,16 @@ export default defineSchema({
     date: v.string(),
     notes: v.optional(v.string()),
     status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
-  }),
+    // Extended fields for validated rental flow
+    equipmentCategory: v.optional(v.string()),
+    quantity: v.optional(v.number()),
+    pricePerUnit: v.optional(v.number()),
+    totalCost: v.optional(v.number()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    days: v.optional(v.number()),
+  })
+    .index("by_item_dates", ["item", "startDate", "endDate"]),
 
   supportRequests: defineTable({
     memberName: v.string(),

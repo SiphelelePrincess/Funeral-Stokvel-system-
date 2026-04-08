@@ -30,6 +30,28 @@ export async function POST(request: Request) {
     email: profile.email,
   });
 
+  // Validate contributions are up to date
+  const contributions = await callQuery<
+    { memberId: string },
+    Array<{ amount: number; date: string; month?: string; status: string }>
+  >(client, "contributions:listByMember", { memberId });
+
+  if (contributions.length > 0) {
+    const paidMonths = contributions
+      .filter((c) => c.status === "paid")
+      .map((c) => (c.month ?? c.date).slice(0, 7));
+    const now = new Date();
+    const prevMonth = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, "0") || "12"}`;
+    const twoMonthsAgo = (() => { const d = new Date(now.getFullYear(), now.getMonth() - 2, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+    const missedRecent = [prevMonth, twoMonthsAgo].filter((m) => !paidMonths.includes(m));
+    if (missedRecent.length >= 2) {
+      return NextResponse.json(
+        { ok: false, message: `Contributions not up to date for: ${missedRecent.join(", ")}. Pay your contributions before submitting a claim.` },
+        { status: 422 },
+      );
+    }
+  }
+
   const beneficiary = await callQuery<
     { idNumber: string },
     { _id: string; name: string } | null

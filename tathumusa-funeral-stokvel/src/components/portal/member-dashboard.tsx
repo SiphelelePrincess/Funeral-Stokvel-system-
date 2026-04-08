@@ -84,7 +84,25 @@ export function MemberDashboard() {
   >([]);
   const [decisions, setDecisions] = useState(initialDecisions);
   const [rsvpState, setRsvpState] = useState<Record<string, { status: string; reason: string }>>({});
-  const [rentalForm, setRentalForm] = useState({ type: "car", item: "", date: "", notes: "" });
+  const [rentalForm, setRentalForm] = useState({
+    type: "car",
+    item: "",
+    date: "",
+    notes: "",
+    // Extended validated fields
+    equipmentCategory: "car",
+    quantity: 1,
+    startDate: "",
+    endDate: "",
+  });
+  const [rentalAvailability, setRentalAvailability] = useState<{
+    checked: boolean;
+    available: boolean;
+    availableQty: number;
+    message: string | null;
+  }>({ checked: false, available: true, availableQty: 0, message: null });
+  const [rentalTotalCost, setRentalTotalCost] = useState(0);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false);
   const [supportForm, setSupportForm] = useState({ funeralOf: "", supportType: "", notes: "" });
   const [memberSummary, setMemberSummary] = useState({
     name: "Current member",
@@ -103,6 +121,15 @@ export function MemberDashboard() {
     : 0;
   const attendanceReward = "10% additional payout if attendance stays above 80%";
 
+  const RENTAL_CATALOG = [
+    { id: "tent", label: "Tent", type: "equipment" as const, pricePerUnit: 350, priceUnit: "per day", maxStock: 5 },
+    { id: "chair", label: "Chairs", type: "equipment" as const, pricePerUnit: 10, priceUnit: "per chair/day", maxStock: 100 },
+    { id: "table", label: "Tables", type: "equipment" as const, pricePerUnit: 25, priceUnit: "per table/day", maxStock: 30 },
+    { id: "car", label: "Funeral car", type: "car" as const, pricePerUnit: 800, priceUnit: "per day", maxStock: 2 },
+  ];
+
+  const selectedCatalogItem = RENTAL_CATALOG.find((c) => c.id === rentalForm.equipmentCategory);
+
   const meetingDays = useMemo(() => {
     return meetingsList
       .map((meeting) => {
@@ -118,6 +145,17 @@ export function MemberDashboard() {
 
   const calendarDays = Array.from({ length: 30 }, (_, index) => index + 1);
   const isHttpUrl = (value?: string) => Boolean(value && value.startsWith("http"));
+
+  // Auto-calculate rental total cost
+  const calculatedRentalCost = useMemo(() => {
+    const item = RENTAL_CATALOG.find((c) => c.id === rentalForm.equipmentCategory);
+    if (!item || !rentalForm.startDate || !rentalForm.endDate) return 0;
+    const start = new Date(rentalForm.startDate);
+    const end = new Date(rentalForm.endDate);
+    if (end < start) return 0;
+    const days = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    return item.pricePerUnit * rentalForm.quantity * days;
+  }, [rentalForm.equipmentCategory, rentalForm.quantity, rentalForm.startDate, rentalForm.endDate]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -631,19 +669,93 @@ export function MemberDashboard() {
     }
   };
 
+  const handleCheckAvailability = async () => {
+    setIsCheckingAvailability(true);
+    setRentalAvailability({ checked: false, available: true, availableQty: 0, message: null });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (!rentalForm.startDate || !rentalForm.endDate) {
+      setRentalAvailability({ checked: true, available: false, availableQty: 0, message: "Please enter start and end dates." });
+      setIsCheckingAvailability(false);
+      return;
+    }
+    const start = new Date(rentalForm.startDate);
+    const end = new Date(rentalForm.endDate);
+    if (start < today) {
+      setRentalAvailability({ checked: true, available: false, availableQty: 0, message: "Start date cannot be in the past." });
+      setIsCheckingAvailability(false);
+      return;
+    }
+    if (end < start) {
+      setRentalAvailability({ checked: true, available: false, availableQty: 0, message: "End date must be after start date." });
+      setIsCheckingAvailability(false);
+      return;
+    }
+    try {
+      const response = await fetch("/api/rentals/check-availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          equipmentCategory: rentalForm.equipmentCategory,
+          startDate: rentalForm.startDate,
+          endDate: rentalForm.endDate,
+          quantity: rentalForm.quantity,
+        }),
+      });
+      const data = (await response.json()) as { ok: boolean; available: boolean; availableQty?: number; message?: string };
+      setRentalAvailability({
+        checked: true,
+        available: data.available ?? false,
+        availableQty: data.availableQty ?? 0,
+        message: data.message ?? (data.available ? "Available! You can proceed." : "Not available for those dates."),
+      });
+    } catch {
+      setRentalAvailability({ checked: true, available: true, availableQty: 0, message: "Could not check availability. You can still submit the request." });
+    } finally {
+      setIsCheckingAvailability(false);
+    }
+  };
+
   const handleRentalRequest = async () => {
     setRentalNotice(null);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (!rentalForm.startDate || !rentalForm.endDate) {
+      setRentalNotice("Please select start and end dates.");
+      return;
+    }
+    if (new Date(rentalForm.startDate) < today) {
+      setRentalNotice("Start date cannot be in the past.");
+      return;
+    }
+    if (new Date(rentalForm.endDate) < new Date(rentalForm.startDate)) {
+      setRentalNotice("End date must be on or after start date.");
+      return;
+    }
+    if (rentalForm.quantity < 1) {
+      setRentalNotice("Quantity must be at least 1.");
+      return;
+    }
     try {
       const response = await fetch("/api/rentals/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(rentalForm),
+        body: JSON.stringify({
+          equipmentCategory: rentalForm.equipmentCategory,
+          quantity: rentalForm.quantity,
+          startDate: rentalForm.startDate,
+          endDate: rentalForm.endDate,
+          notes: rentalForm.notes,
+        }),
       });
-      const data = (await response.json()) as { message?: string };
-      setRentalNotice(data.message ?? "Rental request submitted.");
-      setRentalForm({ type: "car", item: "", date: "", notes: "" });
+      const data = (await response.json()) as { ok: boolean; message?: string };
+      setRentalNotice(data.message ?? (data.ok ? "Rental request submitted." : "Submission failed."));
+      if (data.ok) {
+        setRentalForm({ type: "car", item: "", date: "", notes: "", equipmentCategory: "car", quantity: 1, startDate: "", endDate: "" });
+        setRentalAvailability({ checked: false, available: true, availableQty: 0, message: null });
+      }
     } catch {
-      setRentalNotice("Rental request saved locally. Connect Convex to persist.");
+      setRentalNotice("Network error. Please try again.");
     }
   };
 
@@ -1258,30 +1370,120 @@ export function MemberDashboard() {
           <Card className="rounded-4xl">
             <Pill>Car and equipment rental</Pill>
             <div className="mt-4 grid gap-3">
-              <select
-                className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900"
-                value={rentalForm.type}
-                onChange={(event) => setRentalForm((prev) => ({ ...prev, type: event.target.value }))}
-              >
-                <option value="car">Car rental</option>
-                <option value="equipment">Equipment rental</option>
-              </select>
-              <Input
-                placeholder="Item needed (e.g. hearse, tents, chairs)"
-                value={rentalForm.item}
-                onChange={(event) => setRentalForm((prev) => ({ ...prev, item: event.target.value }))}
-              />
-              <Input
-                placeholder="Date needed"
-                value={rentalForm.date}
-                onChange={(event) => setRentalForm((prev) => ({ ...prev, date: event.target.value }))}
-              />
+              {/* Step 1 – Equipment type dropdown */}
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-[0.24em] text-zinc-500">Equipment type</label>
+                <select
+                  className="w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900"
+                  value={rentalForm.equipmentCategory}
+                  onChange={(event) => {
+                    const cat = event.target.value;
+                    const item = RENTAL_CATALOG.find((c) => c.id === cat);
+                    setRentalForm((prev) => ({ ...prev, equipmentCategory: cat, type: item?.type ?? "equipment" }));
+                    setRentalAvailability({ checked: false, available: true, availableQty: 0, message: null });
+                  }}
+                >
+                  {RENTAL_CATALOG.map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2 – Price display */}
+              {selectedCatalogItem ? (
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Price</p>
+                  <p className="mt-1 text-lg font-semibold text-zinc-900">R{selectedCatalogItem.pricePerUnit} <span className="text-sm font-normal text-zinc-500">{selectedCatalogItem.priceUnit}</span></p>
+                  <p className="mt-1 text-xs text-zinc-500">Max available: {selectedCatalogItem.maxStock}</p>
+                </div>
+              ) : null}
+
+              {/* Step 3 – Quantity */}
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-[0.24em] text-zinc-500">Quantity</label>
+                <Input
+                  type="number"
+                  placeholder="Quantity"
+                  value={String(rentalForm.quantity)}
+                  min="1"
+                  max={String(selectedCatalogItem?.maxStock ?? 100)}
+                  onChange={(event) => {
+                    const q = Math.max(1, Number(event.target.value));
+                    setRentalForm((prev) => ({ ...prev, quantity: q }));
+                    setRentalAvailability({ checked: false, available: true, availableQty: 0, message: null });
+                  }}
+                />
+              </div>
+
+              {/* Step 4 – Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs uppercase tracking-[0.24em] text-zinc-500">Start date</label>
+                  <Input
+                    type="date"
+                    value={rentalForm.startDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(event) => {
+                      setRentalForm((prev) => ({ ...prev, startDate: event.target.value }));
+                      setRentalAvailability({ checked: false, available: true, availableQty: 0, message: null });
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs uppercase tracking-[0.24em] text-zinc-500">End date</label>
+                  <Input
+                    type="date"
+                    value={rentalForm.endDate}
+                    min={rentalForm.startDate || new Date().toISOString().split("T")[0]}
+                    onChange={(event) => {
+                      setRentalForm((prev) => ({ ...prev, endDate: event.target.value }));
+                      setRentalAvailability({ checked: false, available: true, availableQty: 0, message: null });
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Step 5 – Auto-calculated total */}
+              {calculatedRentalCost > 0 ? (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.24em] text-emerald-700">Estimated total</p>
+                  <p className="mt-1 text-2xl font-semibold text-emerald-900">R{calculatedRentalCost}</p>
+                  <p className="mt-1 text-xs text-emerald-700">
+                    {rentalForm.quantity} × R{selectedCatalogItem?.pricePerUnit} ×{" "}
+                    {Math.max(1, Math.ceil((new Date(rentalForm.endDate).getTime() - new Date(rentalForm.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1)} day(s)
+                  </p>
+                </div>
+              ) : null}
+
               <Textarea
-                placeholder="Additional notes"
+                placeholder="Additional notes (optional)"
                 value={rentalForm.notes}
                 onChange={(event) => setRentalForm((prev) => ({ ...prev, notes: event.target.value }))}
               />
-              <Button onClick={handleRentalRequest}>Submit rental request</Button>
+
+              {/* Step 6 – Check availability, then submit */}
+              <Button
+                variant="secondary"
+                onClick={handleCheckAvailability}
+                disabled={isCheckingAvailability || !rentalForm.startDate || !rentalForm.endDate}
+              >
+                {isCheckingAvailability ? "Checking..." : "Check availability"}
+              </Button>
+
+              {rentalAvailability.checked ? (
+                <div className={`rounded-2xl px-4 py-3 ${rentalAvailability.available ? "border border-emerald-200 bg-emerald-50" : "border border-red-200 bg-red-50"}`}>
+                  <p className={`text-sm ${rentalAvailability.available ? "text-emerald-800" : "text-red-700"}`}>
+                    {rentalAvailability.message}
+                  </p>
+                </div>
+              ) : null}
+
+              <Button
+                onClick={handleRentalRequest}
+                disabled={rentalAvailability.checked && !rentalAvailability.available}
+              >
+                Submit rental request
+              </Button>
               {rentalNotice ? <p className="text-sm text-zinc-600">{rentalNotice}</p> : null}
             </div>
           </Card>
