@@ -40,9 +40,10 @@ export async function POST(request: Request) {
 
     // Initialize transaction with Paystack
     const transaction = await paystack.transaction.initialize({
-      amount: body.amount * 100, // Paystack expects amount in kobo (multiply by 100)
+      amount: Math.round(body.amount * 100), // Paystack expects amount in kobo/cents (multiply by 100)
       email: body.email,
       reference,
+      currency: "ZAR", // Required for South African accounts
       callback_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard`,
       metadata: {
         month: body.month,
@@ -58,13 +59,17 @@ export async function POST(request: Request) {
         reference: transaction.data.reference,
       },
     });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Paystack initialization error:", error);
+    
+    // Extract the most useful error message
+    const errorMessage = error.message || (error.response?.data?.message) || "Failed to initialize payment";
+    
     return NextResponse.json(
       {
         ok: false,
-        message: "Failed to initialize payment",
-        error: error instanceof Error ? error.message : "Unknown error",
+        message: errorMessage,
+        error: error.message,
       },
       { status: 500 },
     );
