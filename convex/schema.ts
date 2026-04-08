@@ -125,4 +125,15 @@ export default defineSchema({
     status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
     createdAt: v.string(),
   }),
+
+  fines: defineTable({
+    memberId: v.id("users"),
+    memberName: v.string(),
+    amount: v.number(),
+    reason: v.string(),
+    date: v.string(),
+    status: v.union(v.literal("unpaid"), v.literal("paid")),
+  })
+    .index("by_memberId", ["memberId"])
+    .index("by_status", ["status"]),
 });

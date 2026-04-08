@@ -133,6 +133,16 @@ export const markDeceased = mutation({
   },
 });
 
+export const getByIdNumber = query({
+  args: { idNumber: v.string() },
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query("beneficiaries")
+      .withIndex("by_idNumber", (q) => q.eq("idNumber", args.idNumber))
+      .first();
+  },
+});
+
 export const listDeceased = query({
   args: {},
   handler: async (ctx) => {

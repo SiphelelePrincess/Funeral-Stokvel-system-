@@ -62,6 +62,28 @@ export function AdminDashboard() {
   const [pointsForm, setPointsForm] = useState({ memberNumber: "", points: "" });
   const [pointsNotice, setPointsNotice] = useState<string | null>(null);
 
+  const [loanList, setLoanList] = useState<
+    Array<{ _id: string; memberId: string; amount: number; reason: string; status: string; interestRate: number }>
+  >([]);
+  const [loanNotice, setLoanNotice] = useState<string | null>(null);
+
+  const [claimList, setClaimList] = useState<
+    Array<{ _id: string; memberId: string; beneficiaryId: string; status: string; votesFor: number; votesAgainst: number }>
+  >([]);
+  const [claimNotice, setClaimNotice] = useState<string | null>(null);
+
+  const [finesList, setFinesList] = useState<
+    Array<{ _id: string; memberName: string; amount: number; reason: string; date: string; status: string }>
+  >([]);
+  const [finesForm, setFinesForm] = useState({ memberNumber: "", amount: "", reason: "" });
+  const [finesNotice, setFinesNotice] = useState<string | null>(null);
+
+  const [decisionForm, setDecisionForm] = useState({ title: "", description: "" });
+  const [decisionNotice, setDecisionNotice] = useState<string | null>(null);
+
+  const [minutesForm, setMinutesForm] = useState({ meetingId: "", minutesUrl: "" });
+  const [minutesNotice, setMinutesNotice] = useState<string | null>(null);
+
   const maxMonthlyTotal = useMemo(() => {
     return Math.max(1, ...financeSummary.monthlyTotals.map((item) => item.total));
   }, [financeSummary.monthlyTotals]);
@@ -112,6 +134,9 @@ export function AdminDashboard() {
           summaryRes,
           deceasedRes,
           contributionsRes,
+          loansRes,
+          claimsRes,
+          finesRes,
         ] = await Promise.all([
           fetch("/api/finance/summary"),
           fetch("/api/attendance/overview"),
@@ -121,6 +146,9 @@ export function AdminDashboard() {
           fetch("/api/users/summary"),
           fetch("/api/beneficiaries/deceased"),
           fetch("/api/contributions/list"),
+          fetch("/api/loans/list"),
+          fetch("/api/claims/list"),
+          fetch("/api/fines/list"),
         ]);
 
         if (financeRes.ok) {
@@ -179,6 +207,27 @@ export function AdminDashboard() {
             items?: Array<{ _id: string; name: string; surname?: string; idNumber: string; relationship: string }>;
           };
           setDeceasedBeneficiaries(data.items ?? []);
+        }
+
+        if (loansRes.ok) {
+          const data = (await loansRes.json()) as {
+            items?: Array<{ _id: string; memberId: string; amount: number; reason: string; status: string; interestRate: number }>;
+          };
+          setLoanList(data.items ?? []);
+        }
+
+        if (claimsRes.ok) {
+          const data = (await claimsRes.json()) as {
+            items?: Array<{ _id: string; memberId: string; beneficiaryId: string; status: string; votesFor: number; votesAgainst: number }>;
+          };
+          setClaimList(data.items ?? []);
+        }
+
+        if (finesRes.ok) {
+          const data = (await finesRes.json()) as {
+            items?: Array<{ _id: string; memberName: string; amount: number; reason: string; date: string; status: string }>;
+          };
+          setFinesList(data.items ?? []);
         }
 
         if (summaryRes.ok) {
@@ -293,6 +342,108 @@ export function AdminDashboard() {
       setNotice("Support request removed.");
     } catch {
       setNotice("Support request removed locally. Connect Convex to persist.");
+    }
+  };
+
+  const handleLoanAction = async (loanId: string, action: "approve" | "reject") => {
+    setLoanNotice(null);
+    try {
+      const response = await fetch(`/api/loans/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ loanId }),
+      });
+      const data = (await response.json()) as { message?: string };
+      setLoanNotice(data.message ?? `Loan ${action}d.`);
+      setLoanList((prev) => prev.map((loan) => loan._id === loanId ? { ...loan, status: action === "approve" ? "approved" : "rejected" } : loan));
+    } catch {
+      setLoanNotice("Action failed. Please try again.");
+    }
+  };
+
+  const handleClaimAction = async (claimId: string, action: "approve" | "reject") => {
+    setClaimNotice(null);
+    try {
+      const response = await fetch(`/api/claims/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claimId }),
+      });
+      const data = (await response.json()) as { message?: string };
+      setClaimNotice(data.message ?? `Claim ${action}d.`);
+      setClaimList((prev) => prev.map((claim) => claim._id === claimId ? { ...claim, status: action === "approve" ? "approved" : "rejected" } : claim));
+    } catch {
+      setClaimNotice("Action failed. Please try again.");
+    }
+  };
+
+  const handleAddFine = async () => {
+    setFinesNotice(null);
+    const amount = Number(finesForm.amount);
+    if (!finesForm.memberNumber || !amount || !finesForm.reason) {
+      setFinesNotice("Please enter member number, amount, and reason.");
+      return;
+    }
+    try {
+      const response = await fetch("/api/fines/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberNumber: finesForm.memberNumber, amount, reason: finesForm.reason }),
+      });
+      const data = (await response.json()) as { ok: boolean; message?: string };
+      setFinesNotice(data.message ?? "Fine added.");
+      if (data.ok) {
+        setFinesForm({ memberNumber: "", amount: "", reason: "" });
+        const finesRes = await fetch("/api/fines/list");
+        if (finesRes.ok) {
+          const finesData = (await finesRes.json()) as { items?: Array<{ _id: string; memberName: string; amount: number; reason: string; date: string; status: string }> };
+          setFinesList(finesData.items ?? []);
+        }
+      }
+    } catch {
+      setFinesNotice("Network error. Please try again.");
+    }
+  };
+
+  const handleCreateDecision = async () => {
+    setDecisionNotice(null);
+    if (!decisionForm.title || !decisionForm.description) {
+      setDecisionNotice("Please enter a title and description.");
+      return;
+    }
+    try {
+      const externalId = `decision-${Date.now()}`;
+      const response = await fetch("/api/decisions/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ externalId, title: decisionForm.title, description: decisionForm.description }),
+      });
+      const data = (await response.json()) as { message?: string };
+      setDecisionNotice(data.message ?? "Decision created and open for voting.");
+      setDecisionList((prev) => [{ externalId, title: decisionForm.title, description: decisionForm.description, yesVotes: 0, noVotes: 0 }, ...prev]);
+      setDecisionForm({ title: "", description: "" });
+    } catch {
+      setDecisionNotice("Network error. Please try again.");
+    }
+  };
+
+  const handleUploadMinutes = async () => {
+    setMinutesNotice(null);
+    if (!minutesForm.meetingId || !minutesForm.minutesUrl) {
+      setMinutesNotice("Please enter the meeting ID and the minutes document URL.");
+      return;
+    }
+    try {
+      const response = await fetch("/api/meetings/upload-minutes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meetingId: minutesForm.meetingId, minutesDocumentUrl: minutesForm.minutesUrl }),
+      });
+      const data = (await response.json()) as { ok: boolean; message?: string };
+      setMinutesNotice(data.message ?? "Minutes uploaded.");
+      if (data.ok) setMinutesForm({ meetingId: "", minutesUrl: "" });
+    } catch {
+      setMinutesNotice("Network error. Please try again.");
     }
   };
 
@@ -461,11 +612,28 @@ export function AdminDashboard() {
                 <h3 className="mt-2 text-2xl font-semibold text-zinc-950">7% interest workflow</h3>
               </div>
             </div>
-            <div className="mt-6 rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
-              <p className="font-semibold text-zinc-950">No loan requests yet</p>
-              <p className="mt-2 text-sm leading-7 text-zinc-600">
-                Should a member borrow the stokvel money, a 7% interest will be applied.
-              </p>
+            <div className="mt-6 space-y-3">
+              {loanList.length ? (
+                loanList.slice(0, 5).map((loan) => (
+                  <div key={loan._id} className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
+                    <p className="font-semibold text-zinc-950">R{loan.amount} · {loan.interestRate}% interest</p>
+                    <p className="mt-1 text-sm text-zinc-600">{loan.reason}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.24em] text-zinc-500">{loan.status}</p>
+                    {loan.status === "pending" ? (
+                      <div className="mt-3 flex gap-2">
+                        <Button className="flex-1" onClick={() => handleLoanAction(loan._id, "approve")}>Approve</Button>
+                        <Button variant="secondary" className="flex-1" onClick={() => handleLoanAction(loan._id, "reject")}>Reject</Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
+                  <p className="font-semibold text-zinc-950">No loan requests yet</p>
+                  <p className="mt-2 text-sm leading-7 text-zinc-600">Member loan applications will appear here with 7% interest applied.</p>
+                </div>
+              )}
+              {loanNotice ? <p className="text-sm text-zinc-600">{loanNotice}</p> : null}
             </div>
           </Card>
 
@@ -477,11 +645,28 @@ export function AdminDashboard() {
                 <h3 className="mt-2 text-2xl font-semibold text-zinc-950">Voting and document review</h3>
               </div>
             </div>
-            <div className="mt-6 rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
-              <p className="font-semibold text-zinc-950">No claims yet</p>
-              <p className="mt-2 text-sm leading-7 text-zinc-600">
-                Funeral claims will appear here once members submit documentation.
-              </p>
+            <div className="mt-6 space-y-3">
+              {claimList.length ? (
+                claimList.slice(0, 5).map((claim) => (
+                  <div key={claim._id} className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
+                    <p className="font-semibold text-zinc-950">Claim #{claim._id.slice(-6)}</p>
+                    <p className="mt-1 text-sm text-zinc-600">Votes for: {claim.votesFor} · Against: {claim.votesAgainst}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.24em] text-zinc-500">{claim.status}</p>
+                    {claim.status === "voting" || claim.status === "submitted" ? (
+                      <div className="mt-3 flex gap-2">
+                        <Button className="flex-1" onClick={() => handleClaimAction(claim._id, "approve")}>Approve</Button>
+                        <Button variant="secondary" className="flex-1" onClick={() => handleClaimAction(claim._id, "reject")}>Reject</Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
+                  <p className="font-semibold text-zinc-950">No claims yet</p>
+                  <p className="mt-2 text-sm leading-7 text-zinc-600">Funeral claims appear here once members submit documentation.</p>
+                </div>
+              )}
+              {claimNotice ? <p className="text-sm text-zinc-600">{claimNotice}</p> : null}
             </div>
           </Card>
         </section>
@@ -534,6 +719,7 @@ export function AdminDashboard() {
                   <p className="mt-2 text-xs uppercase tracking-[0.24em] text-zinc-500">
                     Accepted {meeting.acceptedCount} · Declined {meeting.declinedCount}
                   </p>
+                  <p className="mt-1 text-xs text-zinc-400">ID: {meeting._id}</p>
                   <Button
                     variant="secondary"
                     className="mt-3"
@@ -632,23 +818,84 @@ export function AdminDashboard() {
           <Card className="rounded-[30px]">
             <div className="flex items-center gap-2">
               <CalendarPlus2 className="h-5 w-5 text-zinc-500" />
-              <p className="font-semibold text-zinc-950">Meetings and minutes</p>
+              <p className="font-semibold text-zinc-950">Upload meeting minutes</p>
             </div>
-            <p className="mt-3 text-sm leading-7 text-zinc-600">Create meetings, attach minutes, and send RSVP invites with decline reasons stored for follow-up.</p>
+            <p className="mt-3 text-sm leading-7 text-zinc-600">Secretary uploads the minutes document URL for a specific meeting.</p>
+            <div className="mt-4 grid gap-3">
+              <Input
+                placeholder="Meeting ID"
+                value={minutesForm.meetingId}
+                onChange={(event) => setMinutesForm((prev) => ({ ...prev, meetingId: event.target.value }))}
+              />
+              <Input
+                placeholder="Minutes document URL"
+                value={minutesForm.minutesUrl}
+                onChange={(event) => setMinutesForm((prev) => ({ ...prev, minutesUrl: event.target.value }))}
+              />
+              <Button onClick={handleUploadMinutes}>Upload minutes</Button>
+              {minutesNotice ? <p className="text-sm text-zinc-600">{minutesNotice}</p> : null}
+            </div>
+            <div className="mt-4 text-xs text-zinc-400">Meeting IDs are shown in the upcoming meetings list above.</div>
           </Card>
+
           <Card className="rounded-[30px]">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-zinc-500" />
               <p className="font-semibold text-zinc-950">Fines and arrears</p>
             </div>
-            <p className="mt-3 text-sm leading-7 text-zinc-600">The rule engine is shaped for a 30% fine after three missed months and claim blocking after four months of non-payment.</p>
+            <p className="mt-3 text-sm leading-7 text-zinc-600">Add a fine to a member's balance. A 30% fine applies after three missed months.</p>
+            <div className="mt-4 grid gap-3">
+              <Input
+                placeholder="Member number (e.g. MEM-0001)"
+                value={finesForm.memberNumber}
+                onChange={(event) => setFinesForm((prev) => ({ ...prev, memberNumber: event.target.value }))}
+              />
+              <Input
+                placeholder="Fine amount (R)"
+                value={finesForm.amount}
+                onChange={(event) => setFinesForm((prev) => ({ ...prev, amount: event.target.value }))}
+              />
+              <Input
+                placeholder="Reason"
+                value={finesForm.reason}
+                onChange={(event) => setFinesForm((prev) => ({ ...prev, reason: event.target.value }))}
+              />
+              <Button onClick={handleAddFine}>Add fine</Button>
+              {finesNotice ? <p className="text-sm text-zinc-600">{finesNotice}</p> : null}
+            </div>
+            {finesList.length ? (
+              <div className="mt-4 space-y-2">
+                {finesList.slice(0, 5).map((fine) => (
+                  <div key={fine._id} className="rounded-[20px] border border-zinc-200/80 bg-white/85 p-3">
+                    <p className="font-semibold text-zinc-950">{fine.memberName} · R{fine.amount}</p>
+                    <p className="text-sm text-zinc-600">{fine.reason}</p>
+                    <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">{fine.status}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </Card>
+
           <Card className="rounded-[30px]">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-zinc-500" />
-              <p className="font-semibold text-zinc-950">Data analysis</p>
+              <p className="font-semibold text-zinc-950">Create decision vote</p>
             </div>
-            <p className="mt-3 text-sm leading-7 text-zinc-600">Contribution trends, withdrawals, no-claim benefit tracking, and year-end poster uploads are laid out for the next live-data phase.</p>
+            <p className="mt-3 text-sm leading-7 text-zinc-600">Open a new vote for committee members and admins to decide on.</p>
+            <div className="mt-4 grid gap-3">
+              <Input
+                placeholder="Decision title"
+                value={decisionForm.title}
+                onChange={(event) => setDecisionForm((prev) => ({ ...prev, title: event.target.value }))}
+              />
+              <Textarea
+                placeholder="Description of what needs to be decided"
+                value={decisionForm.description}
+                onChange={(event) => setDecisionForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
+              <Button onClick={handleCreateDecision}>Open for voting</Button>
+              {decisionNotice ? <p className="text-sm text-zinc-600">{decisionNotice}</p> : null}
+            </div>
           </Card>
         </section>
 

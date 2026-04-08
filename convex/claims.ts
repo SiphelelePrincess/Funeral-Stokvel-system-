@@ -11,6 +11,29 @@ export const listByMember = query({
   },
 });
 
+export const listAll = query({
+  args: {},
+  handler: async (ctx) => {
+    return ctx.db.query("claims").order("desc").take(100);
+  },
+});
+
+export const vote = mutation({
+  args: {
+    claimId: v.id("claims"),
+    vote: v.union(v.literal("for"), v.literal("against")),
+  },
+  handler: async (ctx, args) => {
+    const claim = await ctx.db.get(args.claimId);
+    if (!claim) throw new Error("Claim not found.");
+    await ctx.db.patch(args.claimId, {
+      votesFor: args.vote === "for" ? claim.votesFor + 1 : claim.votesFor,
+      votesAgainst: args.vote === "against" ? claim.votesAgainst + 1 : claim.votesAgainst,
+      status: "voting",
+    });
+  },
+});
+
 export const create = mutation({
   args: {
     memberId: v.id("users"),

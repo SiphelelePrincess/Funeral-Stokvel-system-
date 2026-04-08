@@ -33,9 +33,9 @@ const paymentSchema = z.object({
 });
 
 const claimSchema = z.object({
-  beneficiary: z.string().min(2),
-  idDocumentName: z.string().min(2),
-  deathCertificateName: z.string().min(2),
+  beneficiaryIdNumber: z.string().min(5, "Enter the beneficiary's SA ID number"),
+  idCopyUrl: z.string().optional(),
+  deathCertificateUrl: z.string().optional(),
   notes: z.string().min(8),
 });
 
@@ -361,9 +361,9 @@ function ClaimCard() {
   const form = useForm<z.infer<typeof claimSchema>>({
     resolver: zodResolver(claimSchema),
     defaultValues: {
-      beneficiary: "",
-      idDocumentName: "",
-      deathCertificateName: "",
+      beneficiaryIdNumber: "",
+      idCopyUrl: "",
+      deathCertificateUrl: "",
       notes: "",
     },
   });
@@ -371,11 +371,24 @@ function ClaimCard() {
   const onSubmit = async (values: z.infer<typeof claimSchema>) => {
     setIsLoading(true);
     setMessage(null);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setMessage(
-      `Claim prepared for ${values.beneficiary}. The workflow will move to member voting after the ID and death certificate are uploaded to live storage.`,
-    );
-    setIsLoading(false);
+    try {
+      const response = await fetch("/api/claims/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          beneficiaryIdNumber: values.beneficiaryIdNumber,
+          idCopyUrl: values.idCopyUrl,
+          deathCertificateUrl: values.deathCertificateUrl,
+          notes: values.notes,
+        }),
+      });
+      const data = (await response.json()) as { ok: boolean; message?: string };
+      setMessage(data.message ?? (data.ok ? "Claim submitted successfully." : "Submission failed."));
+    } catch {
+      setMessage("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -383,15 +396,21 @@ function ClaimCard() {
       <p className="text-xs uppercase tracking-[0.28em] text-zinc-500">Request for payment</p>
       <h3 className="mt-3 text-2xl font-semibold text-zinc-950">Funeral claim intake</h3>
       <form className="mt-5 space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-        <Input {...form.register("beneficiary")} placeholder="Beneficiary name" />
-        <Input {...form.register("idDocumentName")} placeholder="ID document file name" />
         <Input
-          {...form.register("deathCertificateName")}
-          placeholder="Death certificate file name"
+          {...form.register("beneficiaryIdNumber")}
+          placeholder="Beneficiary SA ID number"
+        />
+        <Input
+          {...form.register("idCopyUrl")}
+          placeholder="ID copy URL (optional)"
+        />
+        <Input
+          {...form.register("deathCertificateUrl")}
+          placeholder="Death certificate URL (optional)"
         />
         <Textarea {...form.register("notes")} placeholder="Family notes and support request" />
         <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading ? "Submitting..." : "Submit claim draft"}
+          {isLoading ? "Submitting..." : "Submit claim"}
         </Button>
       </form>
       {message ? <p className="mt-4 text-sm leading-7 text-zinc-600">{message}</p> : null}
@@ -414,11 +433,22 @@ function LoanCard() {
   const onSubmit = async (values: z.infer<typeof loanSchema>) => {
     setIsLoading(true);
     setMessage(null);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setMessage(
-      `Loan request for R${values.amount} captured. Admin review will apply the 7% interest rule before approval.`,
-    );
-    setIsLoading(false);
+    try {
+      const response = await fetch("/api/loans/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: values.amount,
+          reason: `${values.reason} (Repayment: ${values.repaymentPlan})`,
+        }),
+      });
+      const data = (await response.json()) as { ok: boolean; message?: string };
+      setMessage(data.message ?? (data.ok ? "Loan request submitted." : "Submission failed."));
+    } catch {
+      setMessage("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

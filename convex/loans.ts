@@ -11,6 +11,13 @@ export const listByMember = query({
   },
 });
 
+export const listAll = query({
+  args: {},
+  handler: async (ctx) => {
+    return ctx.db.query("loans").order("desc").take(100);
+  },
+});
+
 export const create = mutation({
   args: {
     memberId: v.id("users"),

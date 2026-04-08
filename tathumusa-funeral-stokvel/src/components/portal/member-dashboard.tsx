@@ -95,6 +95,7 @@ export function MemberDashboard() {
   });
 
   const [totalPaid, setTotalPaid] = useState(0);
+  const [myFines, setMyFines] = useState<Array<{ _id: string; amount: number; reason: string; date: string; status: string }>>([]);
   const remainingBeneficiaries = Math.max(0, 15 - beneficiaryList.length);
   const [attendanceSummary, setAttendanceSummary] = useState({ attended: 7, total: 9 });
   const attendanceRate = attendanceSummary.total
@@ -128,6 +129,7 @@ export function MemberDashboard() {
           attendanceRes,
           decisionsRes,
           summaryRes,
+          finesRes,
         ] = await Promise.all([
           fetch("/api/beneficiaries/list"),
           fetch("/api/meetings/list"),
@@ -135,6 +137,7 @@ export function MemberDashboard() {
           fetch("/api/attendance/summary"),
           fetch("/api/decisions/list"),
           fetch("/api/users/summary"),
+          fetch("/api/fines/my"),
         ]);
 
         if (beneficiaryRes.ok) {
@@ -251,6 +254,14 @@ export function MemberDashboard() {
               role: data.user.role ?? "member",
               email: data.user.email ?? "",
             });
+          }
+        }
+        if (finesRes.ok) {
+          const data = (await finesRes.json()) as {
+            items?: Array<{ _id: string; amount: number; reason: string; date: string; status: string }>;
+          };
+          if (data.items?.length) {
+            setMyFines(data.items);
           }
         }
       } catch {
@@ -603,8 +614,8 @@ export function MemberDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          memberName: "Current member",
-          meetingTitle: "General meeting",
+          memberName: memberSummary.name,
+          meetingTitle: meetingsList[0]?.title ?? "General meeting",
           date: new Date().toISOString(),
           status: "attended",
         }),
@@ -799,6 +810,21 @@ export function MemberDashboard() {
                 <div className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
                   <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Open votes</p>
                   <p className="mt-3 text-3xl font-semibold text-zinc-950">{decisions.length}</p>
+                </div>
+                <div className="rounded-3xl border border-zinc-200/80 bg-white/85 p-4">
+                  <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">Outstanding fines</p>
+                  <p className="mt-3 text-3xl font-semibold text-zinc-950">
+                    R{myFines.filter((f) => f.status === "unpaid").reduce((sum, f) => sum + f.amount, 0)}
+                  </p>
+                  {myFines.filter((f) => f.status === "unpaid").length ? (
+                    <div className="mt-3 space-y-2">
+                      {myFines.filter((f) => f.status === "unpaid").map((fine) => (
+                        <p key={fine._id} className="text-sm text-zinc-600">R{fine.amount} – {fine.reason}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-zinc-500">No outstanding fines.</p>
+                  )}
                 </div>
               </div>
             </Card>

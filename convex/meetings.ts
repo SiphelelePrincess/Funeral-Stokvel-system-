@@ -121,6 +121,13 @@ export const listWithRsvpSummary = query({
   },
 });
 
+export const updateMinutes = mutation({
+  args: { meetingId: v.id("meetings"), minutesDocumentUrl: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.meetingId, { minutesDocumentUrl: args.minutesDocumentUrl });
+  },
+});
+
 export const remove = mutation({
   args: { meetingId: v.id("meetings") },
   handler: async (ctx, args) => {
